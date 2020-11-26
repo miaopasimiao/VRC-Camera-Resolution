@@ -6,38 +6,39 @@ using System.Collections;
 using Il2CppSystem.Collections.Generic;
 using Newtonsoft.Json;
 using MelonLoader;
-using UnhollowerRuntimeLib;
-using UnhollowerRuntimeLib.XrefScans;
 using VRC.UserCamera;
-using UIExpansionKit;
 using UIExpansionKit.API;
 using UnityEngine;
 using UnityEngine.UI;
 
-[assembly: MelonInfo(typeof(CameraResolution.Main), "Camera Resolution", "1.1.0", "Dannie")]
+[assembly: MelonInfo(typeof(VRC_Camera_Resolution.Main), "Camera Resolution", "1.2.0", "Dannie")]
 [assembly: MelonGame("VRChat", "VRChat")]
 
-namespace CameraResolution
+namespace VRC_Camera_Resolution
 {
 	public class Main : MelonMod
 	{
-		private const string camconfig = @"UserData/CamConfig.json";
+		private const string configFile = @"UserData/CamConfig.json";
 		private Settings settings;
+
+		private ICustomShowableLayoutedMenu camMenu;
+		private ICustomShowableLayoutedMenu settingsMenu;
+
 		private float aspectRatio;
 
 		public override void OnApplicationStart()
 		{
-			if (!File.Exists(camconfig)) initConfig();
+			if (!File.Exists(configFile)) initConfig();
 			readConfig();
 		}
 
 		public override void VRChat_OnUiManagerInit()
 		{
-			initButtons();
+			initMenus();
 			SetResolution(settings.Resolutions[settings.DefaultRes - 1].ImageHeight, settings.Resolutions[settings.DefaultRes - 1].ImageWidth);
 		}
 
-		private void SetResolution(int photoHeight, int photoWidth)
+		public void SetResolution(int photoHeight, int photoWidth)
 		{
 			var cameraController = UserCameraController.field_Internal_Static_UserCameraController_0;
 			cameraController.photoHeight = photoHeight;
@@ -51,35 +52,16 @@ namespace CameraResolution
 			}
 		}
 
-		private void initButtons()
+		public void initMenus()
 		{
-			var camMenu = ExpansionKitApi.CreateCustomQuickMenuPage(LayoutDescription.QuickMenu4Columns);
 			ExpansionKitApi.GetExpandedMenu(ExpandedMenu.CameraQuickMenu).AddSimpleButton("Resolution", delegate ()
 			{
 				camMenu.Show();
 			});
 
-			createResButtons(ref camMenu);
+			settingsMenu = ExpansionKitApi.CreateCustomQuickMenuPage(LayoutDescription.WideSlimList);
 
-			int numSpaces = 2;
-			if (settings.Resolutions.Count % 4 != 0) numSpaces += 4 - (settings.Resolutions.Count % 4);
-			for (int i = 0; i < numSpaces; i++)
-			{
-				camMenu.AddSpacer();
-			}
-
-			var settingsMenu = ExpansionKitApi.CreateCustomQuickMenuPage(LayoutDescription.WideSlimList);
-
-			camMenu.AddSimpleButton("Settings", delegate ()
-			{
-				settingsMenu.Show();
-			});
-			camMenu.AddSimpleButton("Back", delegate ()
-			{
-				camMenu.Hide();
-			});
-
-			settingsMenu.AddLabel("\nChange Resolutions (requires restart)");
+			settingsMenu.AddLabel("\nChange Resolutions");
 			settingsMenu.AddSimpleButton("Add Resolution", delegate ()
 			{
 				MelonCoroutines.Start(addCam());
@@ -102,19 +84,70 @@ namespace CameraResolution
 			{
 				settingsMenu.Hide();
 			});
+
+			loadCamMenu();
 		}
 
-		private void createResButtons(ref ICustomShowableLayoutedMenu menu)
+		private void loadCamMenu()
+		{
+			if (settings.Resolutions.Count <= 6)
+			{
+				camMenu = ExpansionKitApi.CreateCustomQuickMenuPage(LayoutDescription.QuickMenu3Columns);
+			}
+			else
+			{
+				camMenu = ExpansionKitApi.CreateCustomQuickMenuPage(LayoutDescription.QuickMenu4Columns);
+			}
+			addResButtons();
+			addSettingsBackButtons();
+		}
+
+		private void addResButtons()
 		{
 			foreach (Resolution res in settings.Resolutions)
 			{
-				menu.AddSimpleButton(res.Name, delegate ()
+				camMenu.AddSimpleButton(res.Name, delegate ()
 				{
 					SetResolution(res.ImageHeight, res.ImageWidth);
 				});
 			}
 		}
 
+		private void addSettingsBackButtons()
+		{
+			int numSpaces;
+
+			if(settings.Resolutions.Count <= 6)
+			{
+				numSpaces = 1;
+				if (settings.Resolutions.Count % 3 != 0)
+				{
+					numSpaces += (3 - (settings.Resolutions.Count % 3));
+				}
+			}
+			else
+			{
+				numSpaces = 2;
+				if (settings.Resolutions.Count % 4 != 0)
+				{
+					numSpaces += (4 - (settings.Resolutions.Count % 4));
+				}
+			}
+
+			for (int i = 0; i < numSpaces; i++)
+			{
+				camMenu.AddSpacer();
+			}
+
+			camMenu.AddSimpleButton("Settings", delegate ()
+			{
+				settingsMenu.Show();
+			});
+			camMenu.AddSimpleButton("Back", delegate ()
+			{
+				camMenu.Hide();
+			});
+		}
 
 		private IEnumerator addCam()
 		{
@@ -122,7 +155,7 @@ namespace CameraResolution
 			int height = -2;
 			int width = -2;
 
-			UIExpansionKit.API.BuiltinUiUtils.ShowInputPopup("Enter Resolution Name:", "", InputField.InputType.Standard, false, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			BuiltinUiUtils.ShowInputPopup("Enter Resolution Name:", "", InputField.InputType.Standard, false, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
 			{
 				name = s;
 			}, null, "Name...", true, null);
@@ -131,7 +164,7 @@ namespace CameraResolution
 				yield return new WaitForEndOfFrame();
 			}
 
-			UIExpansionKit.API.BuiltinUiUtils.ShowInputPopup("Enter Resolution Height:", "", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			BuiltinUiUtils.ShowInputPopup("Enter Resolution Height:", "", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
 			{
 				if (!int.TryParse(s, out height) || height < 1)
 				{
@@ -143,7 +176,7 @@ namespace CameraResolution
 				yield return new WaitForEndOfFrame();
 			}
 
-			UIExpansionKit.API.BuiltinUiUtils.ShowInputPopup("Enter Resolution Width:", "-1", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			BuiltinUiUtils.ShowInputPopup("Enter Resolution Width:", "-1", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
 			{
 				if (!int.TryParse(s, out width) || width < 1)
 				{
@@ -157,6 +190,7 @@ namespace CameraResolution
 
 			settings.Resolutions.Add(new Resolution(name, height, width));
 			writeConfig();
+			loadCamMenu();
 
 			yield break;
 		}
@@ -166,7 +200,8 @@ namespace CameraResolution
 			string name = "";
 			int index = -1;
 			bool flag = false;
-			UIExpansionKit.API.BuiltinUiUtils.ShowInputPopup("Delete Resolution:", "", InputField.InputType.Standard, false, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+
+			BuiltinUiUtils.ShowInputPopup("Delete Resolution:", "", InputField.InputType.Standard, false, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
 			{
 				if (!int.TryParse(s, out index))
 				{
@@ -201,6 +236,8 @@ namespace CameraResolution
 				catch { }
 			}
 			writeConfig();
+			loadCamMenu();
+
 			yield break;
 		}
 
@@ -209,7 +246,7 @@ namespace CameraResolution
 			float AspectWidth = -1;
 			float AspectHeight = -1;
 
-			UIExpansionKit.API.BuiltinUiUtils.ShowInputPopup("Aspect Ration Width:", "16", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			BuiltinUiUtils.ShowInputPopup("Aspect Ration Width:", "16", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
 			{
 				if (!float.TryParse(s, out AspectWidth) || AspectWidth < 0)
 				{
@@ -221,7 +258,7 @@ namespace CameraResolution
 				yield return new WaitForEndOfFrame();
 			}
 
-			UIExpansionKit.API.BuiltinUiUtils.ShowInputPopup("Aspect Ration Height:", "9", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			BuiltinUiUtils.ShowInputPopup("Aspect Ration Height:", "9", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
 			{
 				if (!float.TryParse(s, out AspectHeight) || AspectHeight < 0)
 				{
@@ -245,7 +282,7 @@ namespace CameraResolution
 		{
 			int defaultRes = -1;
 
-			UIExpansionKit.API.BuiltinUiUtils.ShowInputPopup("Default Mode:", "1", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			BuiltinUiUtils.ShowInputPopup("Default Mode:", "1", InputField.InputType.Standard, true, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
 			{
 				if (!int.TryParse(s, out defaultRes) || !(defaultRes > 0 && defaultRes < settings.Resolutions.Count))
 				{
@@ -267,12 +304,12 @@ namespace CameraResolution
 		private void writeConfig()
 		{
 			string conf = JsonConvert.SerializeObject(settings, Formatting.Indented);
-			File.WriteAllText(camconfig, conf);
+			File.WriteAllText(configFile, conf);
 		}
 
 		private void readConfig()
 		{
-			string conf = File.ReadAllText(camconfig);
+			string conf = File.ReadAllText(configFile);
 			settings = JsonConvert.DeserializeObject<Settings>(conf);
 			aspectRatio = settings.Width / settings.Height;
 		}
@@ -286,7 +323,6 @@ namespace CameraResolution
 			settings = new Settings(16, 9, 1, res);
 			writeConfig();
 		}
-
 	}
 
 	public class Resolution
@@ -316,5 +352,6 @@ namespace CameraResolution
 			Resolutions = reses;
 		}
 	}
+
 
 }
