@@ -38,6 +38,20 @@ namespace VRC_Camera_Resolution
 			SetResolution(settings.Resolutions[settings.DefaultRes - 1].ImageHeight, settings.Resolutions[settings.DefaultRes - 1].ImageWidth);
 		}
 
+		public override void OnLevelWasLoaded(int level)
+		{
+			
+			switch (level)
+			{
+				case 0: 
+				case 1: 
+					break;
+				default:
+					MelonCoroutines.Start(CamClipping());
+					break;
+			}
+		}
+
 		public void SetResolution(int photoHeight, int photoWidth)
 		{
 			var cameraController = UserCameraController.field_Internal_Static_UserCameraController_0;
@@ -78,6 +92,10 @@ namespace VRC_Camera_Resolution
 			settingsMenu.AddSimpleButton("Default Resolution", delegate ()
 			{
 				MelonCoroutines.Start(ChangeDefaultRes());
+			});
+			settingsMenu.AddSimpleButton("Clipping Planes", delegate ()
+			{
+				MelonCoroutines.Start(ChangeClipSetting());
 			});
 			settingsMenu.AddSpacer();
 			settingsMenu.AddSimpleButton("Back", delegate ()
@@ -301,6 +319,47 @@ namespace VRC_Camera_Resolution
 			yield break;
 		}
 
+		private IEnumerator ChangeClipSetting()
+		{
+			float nearclip = -1;
+			float farclip = -1;
+			BuiltinUiUtils.ShowInputPopup("Near Clipping point", "0.01", InputField.InputType.Standard, false, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			{
+				if (!float.TryParse(s, out nearclip) || nearclip < 0)
+				{
+					nearclip = 0.01f;
+				}
+			}, null, "Near Clipping Point", true, null);
+			while (nearclip == -1)
+			{
+				yield return new WaitForEndOfFrame();
+			}
+			BuiltinUiUtils.ShowInputPopup("Far Clipping point", "2500", InputField.InputType.Standard, false, "Okay", delegate (string s, Il2CppSystem.Collections.Generic.List<KeyCode> k, Text t)
+			{
+				if (!float.TryParse(s, out farclip) || farclip < 0)
+				{
+					nearclip = 2500f;
+				}
+			}, null, "Near Clipping Point", true, null);
+			while (farclip == -1)
+			{
+				yield return new WaitForEndOfFrame();
+			}
+			settings.NearClip = nearclip;
+			settings.FarClip = farclip;
+			writeConfig();
+			MelonCoroutines.Start(CamClipping());
+		}
+
+		private IEnumerator CamClipping()
+		{
+			yield return new WaitForSecondsRealtime(15f);
+			var cameraController = UserCameraController.field_Internal_Static_UserCameraController_0;
+			Camera cameraCam = cameraController.photoCamera.GetComponent<Camera>();
+			cameraCam.nearClipPlane = settings.NearClip;
+			cameraCam.farClipPlane = settings.FarClip;
+		}
+
 		private void writeConfig()
 		{
 			string conf = JsonConvert.SerializeObject(settings, Formatting.Indented);
@@ -320,7 +379,7 @@ namespace VRC_Camera_Resolution
 			res.Add(new Resolution("1080p", 1080, -1));
 			res.Add(new Resolution("4K", 2160, -1));
 			res.Add(new Resolution("8K", 4320, -1));
-			settings = new Settings(16, 9, 1, res);
+			settings = new Settings(16, 9, 1, 0.01f, 2000f, res);
 			writeConfig();
 		}
 	}
@@ -343,12 +402,16 @@ namespace VRC_Camera_Resolution
 		public float Width { get; set; }
 		public float Height { get; set; }
 		public int DefaultRes { get; set; }
+		public float NearClip { get; set; }
+		public float FarClip { get; set; }
 		public System.Collections.Generic.List<Resolution> Resolutions { get; set; }
-		public Settings(float w, float h, int defRes, System.Collections.Generic.List<Resolution> reses)
+		public Settings(float w, float h, int defRes, float nearclip, float farclip, System.Collections.Generic.List<Resolution> reses)
 		{
 			Width = w;
 			Height = h;
 			DefaultRes = defRes;
+			NearClip = nearclip;
+			FarClip = farclip;
 			Resolutions = reses;
 		}
 	}
